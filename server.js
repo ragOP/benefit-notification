@@ -66,6 +66,15 @@ app.get("/", (_req, res) => res.send("OK"));
 
 // ------- ADMIN AUTH & FCM TOKEN ------- //
 
+// Array to store unique FCM tokens
+const fcmTokens = [];
+
+// Function to add a unique FCM token
+function addFcmToken(token) {
+  if (!fcmTokens.includes(token)) {
+    fcmTokens.push(token);
+  }
+}
 app.post("/save-token", (req, res) => {
   fcmToken = req.body.fcmToken;
   console.log("FCM Token saved:", fcmToken);
@@ -96,30 +105,35 @@ admin.initializeApp({
 
 app.get("/send-call-notification", async (req, res) => {
   try {
-    const targetToken = fcmToken;
-    if (!targetToken) {
+    if (!fcmTokens.length) {
       return res
         .status(400)
-        .json({ success: false, error: "Missing FCM token" });
+        .json({ success: false, error: "No FCM tokens available" });
     }
-    const message = {
-      token: targetToken,
-      notification: {
-        title: "Incoming Call",
-        body: "A user clicked the Call button!",
-      },
-      //   android: {
-      //     notification: {
-      //       channelId: "chat-messages",
-      //       priority: "high",
-      //       sound: "default",
-      //     },
-      //   },
-    };
-
-    const response = await admin.messaging().send(message);
-
-    res.json({ success: true, message: "Notification sent" });
+    const results = [];
+    for (const token of fcmTokens) {
+      const message = {
+        token,
+        notification: {
+          title: "Incoming Call",
+          body: "A user clicked the Call button!",
+        },
+        // android: {
+        //   notification: {
+        //     channelId: "chat-messages",
+        //     priority: "high",
+        //     sound: "default",
+        //   },
+        // },
+      };
+      try {
+        const response = await admin.messaging().send(message);
+        results.push({ token, success: true, response });
+      } catch (err) {
+        results.push({ token, success: false, error: err.message });
+      }
+    }
+    res.json({ success: true, results });
   } catch (error) {
     console.error("Error sending notification:", error);
     res.status(500).json({ success: false, error: error.message });
