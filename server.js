@@ -119,13 +119,13 @@ app.get("/send-call-notification", async (req, res) => {
           title: "Incoming Call",
           body: "A user clicked the Call button!",
         },
-        // android: {
-        //   notification: {
-        //     channelId: "chat-messages",
-        //     priority: "high",
-        //     sound: "default",
-        //   },
-        // },
+        android: {
+          notification: {
+            channelId: "chat-messages",
+            priority: "high",
+            sound: "default",
+          },
+        },
       };
       try {
         const response = await admin.messaging().send(message);
