@@ -96,8 +96,7 @@ admin.initializeApp({
 
 app.get("/send-call-notification", async (req, res) => {
   try {
-    const targetToken =
-      req.body?.token || req.query?.token || latestAdminFcmToken;
+    const targetToken = fcmToken;
     if (!targetToken) {
       return res
         .status(400)
