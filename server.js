@@ -77,6 +77,7 @@ function addFcmToken(token) {
 }
 app.post("/save-token", (req, res) => {
   fcmToken = req.body.fcmToken;
+  addFcmToken(fcmToken);
   console.log("FCM Token saved:", fcmToken);
   res.json({ success: true, token: fcmToken });
 });
