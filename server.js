@@ -83,7 +83,7 @@ app.post("/save-token", (req, res) => {
 });
 
 app.get("/get-token", (req, res) => {
-  res.json({ fcmToken });
+  res.json({ fcmTokens });
 });
 app.post("/api/event", (req, res) => {
   const auth = req.header("x-button-secret");
