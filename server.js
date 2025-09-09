@@ -107,7 +107,6 @@ admin.initializeApp({
 app.post("/send-call-notification", async (req, res) => {
   try {
     const { tel } = req.body;
-    console.log(meta, "<<<<<<<<<");
     if (!fcmTokens.length) {
       return res
         .status(400)
