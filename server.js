@@ -104,8 +104,10 @@ admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
 });
 
-app.get("/send-call-notification", async (req, res) => {
+app.post("/send-call-notification", async (req, res) => {
   try {
+    const { meta } = req.body;
+    console.log(meta, "<<<<<<<<<");
     if (!fcmTokens.length) {
       return res
         .status(400)
@@ -117,7 +119,7 @@ app.get("/send-call-notification", async (req, res) => {
         token,
         notification: {
           title: "Incoming Call",
-          body: "A user clicked the Call button!",
+          body: `call from ${meta.tel} `,
         },
         android: {
           notification: {
