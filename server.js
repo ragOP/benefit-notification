@@ -106,7 +106,7 @@ admin.initializeApp({
 
 app.post("/send-call-notification", async (req, res) => {
   try {
-    const { meta } = req.body;
+    const { tel } = req.body;
     console.log(meta, "<<<<<<<<<");
     if (!fcmTokens.length) {
       return res
@@ -119,7 +119,7 @@ app.post("/send-call-notification", async (req, res) => {
         token,
         notification: {
           title: "Incoming Call",
-          body: `call from ${meta.tel} `,
+          body: `call from ${tel} `,
         },
         android: {
           notification: {
