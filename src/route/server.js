@@ -6,28 +6,31 @@ const cors = require("cors");
 const bodyParser = require("body-parser");
 const { Server } = require("socket.io");
 const admin = require("firebase-admin");
-const serviceAccount = {
-  type: "service_account",
-  project_id: process.env.GOOGLE_PROJECT_ID,
-  private_key_id: process.env.GOOGLE_PRIVATE_KEY_ID,
-  private_key: process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, "\n"),
-  client_email: process.env.GOOGLE_CLIENT_EMAIL,
-  client_id: process.env.GOOGLE_CLIENT_ID,
-  auth_uri: process.env.GOOGLE_AUTH_URI,
-  token_uri: process.env.GOOGLE_TOKEN_URI,
-  auth_provider_x509_cert_url: process.env.GOOGLE_AUTH_PROVIDER_CERT_URL,
-  client_x509_cert_url: process.env.GOOGLE_CLIENT_CERT_URL,
-  universe_domain: process.env.GOOGLE_UNIVERSE_DOMAIN,
-};
-
-console.log("Firebase project:", serviceAccount.project_id);
-
+const socketPayload = require("../model/payloadModel.js");
+const connectDB = require("../db/db.js");
+const { serviceAccount } = require("../services/service.js");
 const PORT = process.env.PORT || 9010;
 const BUTTON_SECRET = process.env.BUTTON_SECRET || "change-me";
 let fcmToken = "";
 
 const app = express();
 const server = http.createServer(app);
+
+//-------Db Connection----------//
+connectDB()
+  .then(() => {
+    server.listen(PORT, () => {
+      console.log(`Realtime server running on port ${PORT}`);
+      console.log("Allowed origins: ALL (*)");
+    });
+  })
+  .catch((err) => {
+    app.on("Error", (err) => {
+      console.log("ERROr", err);
+      throw err;
+    });
+    console.log("Mongo Db Connection Failed", err);
+  });
 
 app.use(
   cors({
@@ -48,6 +51,7 @@ app.use((req, res, next) => {
 
 app.use(bodyParser.json());
 
+//--------Socket-------------//
 const io = new Server(server, {
   cors: {
     origin: "*",
@@ -66,15 +70,15 @@ app.get("/", (_req, res) => res.send("OK"));
 
 // ------- ADMIN AUTH & FCM TOKEN ------- //
 
-// Array to store unique FCM tokens
-const fcmTokens = [];
-
 // Function to add a unique FCM token
+const fcmTokens = [];
 function addFcmToken(token) {
   if (!fcmTokens.includes(token)) {
     fcmTokens.push(token);
   }
 }
+
+//---------Save fcm Token--------------//
 app.post("/save-token", (req, res) => {
   fcmToken = req.body.fcmToken;
   addFcmToken(fcmToken);
@@ -85,7 +89,9 @@ app.post("/save-token", (req, res) => {
 app.get("/get-token", (req, res) => {
   res.json({ fcmTokens });
 });
-app.post("/api/event", (req, res) => {
+
+//---------get payload---------//
+app.post("/api/event", async (req, res) => {
   const auth = req.header("x-button-secret");
   if (auth !== BUTTON_SECRET) {
     return res.status(401).json({ ok: false, error: "Unauthorized" });
@@ -94,12 +100,42 @@ app.post("/api/event", (req, res) => {
   const { type = "unknown", who = "public-site", meta = {} } = req.body || {};
   const payload = { at: new Date().toISOString(), type, who, meta };
 
-  io.emit("site:event", payload);
-  return res.json({ ok: true });
+  try {
+    const data = await socketPayload.create({
+      id: `id_${Date.now()}_${Math.floor(Math.random() * 1e5)}`,
+      type,
+      who,
+      meta,
+    });
+    console.log(data, "<<<<<<<<<<");
+    io.emit("site:event", payload);
+    return res.json({ ok: true, data });
+  } catch (error) {
+    console.log("unable to save payload", error);
+  }
+});
+
+app.get("/api/get-payload", async (req, res) => {
+  try {
+    const data = await socketPayload.find({}).sort({ createdAt: -1 });
+    if (!data) {
+      return res
+        .status(404)
+        .json({ success: false, message: "no payload foyund" });
+    }
+    return res
+      .status(200)
+      .json({
+        success: true,
+        data: data,
+        message: "payload retrived successfully",
+      });
+  } catch (error) {
+    console.log("failed to fetch data", error);
+  }
 });
 
 // ------- FIREBASE NOTIFICATION ------- //
-
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
 });
@@ -135,14 +171,9 @@ app.post("/send-call-notification", async (req, res) => {
         results.push({ token, success: false, error: err.message });
       }
     }
-    res.json({ success: true, results });
+    return res.json({ success: true, results });
   } catch (error) {
     console.error("Error sending notification:", error);
     res.status(500).json({ success: false, error: error.message });
   }
-});
-
-server.listen(PORT, () => {
-  console.log(`Realtime server running on port ${PORT}`);
-  console.log("Allowed origins: ALL (*)");
 });
