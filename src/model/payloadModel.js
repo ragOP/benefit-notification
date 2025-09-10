@@ -1,4 +1,13 @@
-const { mongoose, Schema } = require("mongoose");
+const mongoose = require("mongoose");
+const { Schema } = mongoose;
+
+const metaSchema = new Schema(
+  {
+    tel: { type: String },
+    page: { type: String },
+  },
+  { _id: false }
+);
 
 const socketPayloadSchema = new Schema(
   {
@@ -11,12 +20,10 @@ const socketPayloadSchema = new Schema(
     who: {
       type: String,
     },
-    meta: {
-      tel: { type: Number },
-      page: { type: String },
-    },
+    meta: metaSchema,
   },
   { timestamps: true }
 );
+
 const socketPayload = mongoose.model("socketPayload", socketPayloadSchema);
 module.exports = socketPayload;
