@@ -100,18 +100,14 @@ app.post("/api/event", async (req, res) => {
   const { type = "unknown", who = "public-site", meta = {} } = req.body || {};
   const payload = { at: new Date().toISOString(), type, who, meta };
 
-  try {
-    const data = await socketPayload.create({
-      id: `id_${Date.now()}_${Math.floor(Math.random() * 1e5)}`,
-      type,
-      who,
-      meta,
-    });
-    io.emit("site:event", payload);
-    return res.json({ ok: true, data });
-  } catch (error) {
-    console.log("unable to save payload", error);
-  }
+  const data = await socketPayload.create({
+    id: `id_${Date.now()}_${Math.floor(Math.random() * 1e5)}`,
+    type,
+    who,
+    meta,
+  });
+  io.emit("site:event", payload);
+  return res.json({ ok: true, data });
 });
 
 app.get("/api/get-payload", async (req, res) => {
@@ -129,6 +125,9 @@ app.get("/api/get-payload", async (req, res) => {
     });
   } catch (error) {
     console.log("failed to fetch data", error);
+    return res
+      .status(500)
+      .json({ success: false, error: "Failed to fetch payload" });
   }
 });
 
