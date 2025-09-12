@@ -9,9 +9,10 @@ const admin = require("firebase-admin");
 const socketPayload = require("./src/model/payloadModel.js");
 const connectDB = require("./src/db/db.js");
 const { serviceAccount } = require("./src/services/service.js");
+const { sendViaAPNs } = require("./src/utils/ios/index.js");
+const token = require("./src/model/tokenModel.js");
 const PORT = process.env.PORT || 9010;
 const BUTTON_SECRET = process.env.BUTTON_SECRET || "change-me";
-let fcmToken = "";
 
 const app = express();
 const server = http.createServer(app);
@@ -70,24 +71,37 @@ app.get("/", (_req, res) => res.send("OK"));
 
 // ------- ADMIN AUTH & FCM TOKEN ------- //
 
-// Function to add a unique FCM token
-const fcmTokens = [];
-function addFcmToken(token) {
-  if (!fcmTokens.includes(token)) {
-    fcmTokens.push(token);
-  }
-}
-
 //---------Save fcm Token--------------//
-app.post("/save-token", (req, res) => {
-  fcmToken = req.body.fcmToken;
-  addFcmToken(fcmToken);
-  console.log("FCM Token saved:", fcmToken);
-  res.json({ success: true, token: fcmToken });
+app.post("/save-token", async (req, res) => {
+  try {
+    const { fcmToken, apnToken } = req.body;
+
+    const tokenData = await token.findOneAndUpdate(
+      {},
+      { $set: { fcmToken, apnToken } },
+      { new: true, upsert: true }
+    );
+
+    console.log("Token saved/updated:", tokenData);
+    res.json({ success: true, token: tokenData });
+  } catch (error) {
+    console.error("Error saving token:", error);
+    res.status(500).json({ success: false, error: error.message });
+  }
 });
 
-app.get("/get-token", (req, res) => {
-  res.json({ fcmTokens });
+app.get("/get-token", async (req, res) => {
+  const fcmToken = await token.find({});
+  if (!fcmToken) {
+    return res
+      .status(404)
+      .json({ success: false, data: null, message: "failed to get fcm token" });
+  }
+  return res.status(200).json({
+    success: true,
+    data: fcmToken,
+    message: "fcm token fetched successfully",
+  });
 });
 
 //---------get payload---------//
@@ -139,35 +153,82 @@ admin.initializeApp({
 app.post("/send-call-notification", async (req, res) => {
   try {
     const { tel } = req.body;
-    if (!fcmTokens.length) {
+    const user = await token.findOne({}, { fcmToken: 1, apnToken: 0, _id: 0 });
+
+    if (!user || !user.fcmToken) {
       return res
-        .status(400)
-        .json({ success: false, error: "No FCM tokens available" });
+        .status(404)
+        .json({ success: false, message: "No FCM token found" });
     }
+
+    const fcmToken = user.fcmToken;
     const results = [];
-    for (const token of fcmTokens) {
-      const message = {
-        token,
+    const message = {
+      token: fcmToken,
+      notification: {
+        title: "Incoming Call",
+        body: `call from ${tel} `,
+      },
+      android: {
+        priority: "high",
         notification: {
-          title: "Incoming Call",
-          body: `call from ${tel} `,
+          sound: "default",
         },
-        android: {
-          notification: {
-            channelId: "chat-messages",
-            priority: "high",
-            sound: "default",
-          },
-        },
-      };
-      try {
-        const response = await admin.messaging().send(message);
-        results.push({ token, success: true, response });
-      } catch (err) {
-        results.push({ token, success: false, error: err.message });
-      }
+      },
+    };
+    try {
+      const response = await admin.messaging().send(message);
+      results.push({ token: fcmToken, success: true, response });
+    } catch (err) {
+      results.push({ token: fcmToken, success: false, error: err.message });
     }
     return res.json({ success: true, results });
+  } catch (error) {
+    console.error("Error sending notification:", error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+app.post("/send-ios-notification", async (req, res) => {
+  try {
+    const { tel, topicOverride } = req.body;
+
+    const notificationData = {
+      title: "Incoming Call",
+      body: `Call from ${tel}`,
+    };
+
+    const results = [];
+    let successCount = 0,
+      failureCount = 0;
+
+    const user = await token.findOne({}, { apnToken: 1, fcmToken: 0, _id: 0 });
+
+    if (!user || !user.apnToken) {
+      return res
+        .status(404)
+        .json({ success: false, message: "No APN token found" });
+    }
+
+    const apnToken = user.apnToken;
+
+    const resp = await sendViaAPNs({
+      apnToken,
+      notificationData,
+      topicOverride,
+    });
+
+    results.push({ apnToken, ...resp });
+    resp.success ? successCount++ : failureCount++;
+
+    return res.status(200).json({
+      statusCode: 200,
+      data: {
+        successCount,
+        failureCount,
+        results,
+      },
+    });
   } catch (error) {
     console.error("Error sending notification:", error);
     res.status(500).json({ success: false, error: error.message });
