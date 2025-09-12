@@ -153,7 +153,7 @@ admin.initializeApp({
 app.post("/send-call-notification", async (req, res) => {
   try {
     const { tel } = req.body;
-    const user = await token.findOne({}, { fcmToken: 1, apnToken: 0, _id: 0 });
+    const user = await token.findOne({}, { fcmToken: 1, _id: 0 });
 
     if (!user || !user.fcmToken) {
       return res
@@ -202,7 +202,7 @@ app.post("/send-ios-notification", async (req, res) => {
     let successCount = 0,
       failureCount = 0;
 
-    const user = await token.findOne({}, { apnToken: 1, fcmToken: 0, _id: 0 });
+    const user = await token.findOne({}, { apnToken: 1, _id: 0 });
 
     if (!user || !user.apnToken) {
       return res
